@@ -21,9 +21,6 @@ using ServiceLayer;
 using EntitiesLayer;
 
 namespace PresentationLayer {
-    /// <summary>
-    /// Interaction logic for AddCar.xaml
-    /// </summary>
     public partial class AddCar : UserControl {
         CarService service;
         int num;

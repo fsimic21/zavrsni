@@ -1,4 +1,5 @@
 ﻿using EntitiesLayer;
+using Microsoft.IdentityModel.Tokens;
 using ServiceLayer;
 using System;
 using System.Collections.Generic;
@@ -29,10 +30,17 @@ namespace PresentationLayer {
         }
 
         private void AddCarButton_Click(object sender, RoutedEventArgs e) {
-            AddCar screen = new AddCar(service, service.GetAllCars().Count());
-            this.Content = screen;
-
+            var cars = service.GetAllCars();
+            int num = 1; 
+            if (cars.Count > 0) {
+                var lastCar = cars[cars.Count - 1]; 
+                num = lastCar.Id + 1;
+            }
+            AddCar screen = new AddCar(service, num);
+            Content = screen;
         }
+
+
 
         private void DeleteCarButton_Click(object sender, RoutedEventArgs e) {
             service.DeleteCar(CarsDataGrid.SelectedItem as Car);
