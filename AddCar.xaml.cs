@@ -19,17 +19,20 @@ using System.IO;
 using System.Text.RegularExpressions;
 using ServiceLayer;
 using EntitiesLayer;
-using System.Windows.Media;
 
 namespace PresentationLayer {
-    public partial class UcImage : UserControl {
-
+    /// <summary>
+    /// Interaction logic for AddCar.xaml
+    /// </summary>
+    public partial class AddCar : UserControl {
         CarService service;
+        int num;
 
-        public UcImage(CarService service) {
+        public AddCar(CarService service, int num) {
             this.service = service;
+            this.num = num;
             InitializeComponent();
-            
+
         }
 
         private void LoadImageButton_Click(object sender, System.Windows.RoutedEventArgs e) {
@@ -39,26 +42,6 @@ namespace PresentationLayer {
                 DisplayImage(filePath);
                 GrayImageDisplay(filePath);
                 DetectCarColour(filePath);
-                CheckCar();
-            }
-        }
-
-        private void CheckCar() {
-            List<Car> list = service.GetAllCars();
-            Car car = new Car() {
-                Id = 0,
-                Color = ColorTextBox.Text,
-                LicencePlate = LicenceTextBox.Text
-            };
-            foreach (var c in list)
-            {
-                if(car.LicencePlate == c.LicencePlate && car.Color == c.Color) {
-                    DetectionButton.Background = new SolidColorBrush(Colors.Green);
-                    DetectionButton.Content = "Passed";
-                    break;
-                }
-                DetectionButton.Background = new SolidColorBrush(Colors.Red);
-                DetectionButton.Content = "Reject";
             }
         }
 
@@ -148,7 +131,7 @@ namespace PresentationLayer {
                 double cannyThresholdLinking = 120.0;
                 CvInvoke.Canny(gray, cannyEdges, cannyThreshold, cannyThresholdLinking);
 
-                List<RotatedRect> boxList = new List<RotatedRect>(); 
+                List<RotatedRect> boxList = new List<RotatedRect>();
                 using (VectorOfVectorOfPoint contours = new VectorOfVectorOfPoint()) {
                     CvInvoke.FindContours(cannyEdges, contours, null, RetrType.List, ChainApproxMethod.ChainApproxSimple);
                     int count = contours.Size;
@@ -160,7 +143,7 @@ namespace PresentationLayer {
                                 if (approxContour.Size == 4) {
                                     bool isRectangle = true;
                                     Point[] pts = approxContour.ToArray();
-                                    LineSegment2D[] edges = Emgu.CV.PointCollection.PolyLine(pts, true);
+                                    LineSegment2D[] edges = PointCollection.PolyLine(pts, true);
                                     for (int j = 0; j < edges.Length; j++) {
                                         double angle = Math.Abs(edges[(j + 1) % edges.Length].GetExteriorAngleDegree(edges[j]));
                                         if (angle < 80 || angle > 100) {
@@ -204,5 +187,14 @@ namespace PresentationLayer {
             }
         }
 
+        private void AddCarButton_Click(object sender, System.Windows.RoutedEventArgs e) {
+            Car car = new Car();
+            car.Color = ColorTextBox.Text.ToString();
+            car.LicencePlate = LicenceTextBox.Text.ToString();
+            car.Id = num+1;
+            service.AddCar(car);
+            UcManager screen = new UcManager(service);
+            this.Content = screen;
+        }
     }
 }

@@ -31,5 +31,10 @@ namespace PresentationLayer
             UcImage screen = new UcImage(service);
             MainContent.Content = screen;
         }
+
+        private void Manage_Click(object sender, RoutedEventArgs e) {
+            UcManager screen = new UcManager(service);
+            MainContent.Content = screen;
+        }
     }
 }

@@ -10,7 +10,8 @@
         <Menu VerticalAlignment="Top">
             <MenuItem Header="Home Screen" Click="HomeScreen_Click"/>
             <MenuItem Header="Camera" Click="Camera_Click"/>
-            <MenuItem Header="Image" Click="Image_Click"     />
+            <MenuItem Header="Image" Click="Image_Click"/>
+            <MenuItem Header="Manage cars" Click="Manage_Click"/>
         </Menu>
         <ContentControl x:Name="MainContent" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Margin="0,25,0,0"/>
     </Grid>
