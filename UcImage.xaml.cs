@@ -9,7 +9,6 @@ using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
 using System;
 using System.Drawing;
-using Patagames.Ocr;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using Color = System.Drawing.Color;
@@ -21,6 +20,7 @@ using ServiceLayer;
 using EntitiesLayer;
 using System.Windows.Media;
 using System.Reflection.Metadata;
+using Tesseract;
 
 namespace PresentationLayer {
     public partial class UcImage : UserControl {
@@ -81,41 +81,40 @@ namespace PresentationLayer {
 
         private void GetLicensePlate(Bitmap image) {
             int[] angles = { 0, 45, -45 };
+            string longestText = string.Empty;
 
-            using (var ocrApi = OcrApi.Create()) {
-                ocrApi.Init(Patagames.Ocr.Enums.Languages.English);
-                Bitmap rotatedImage = image;
-                string longestText = string.Empty;
-
+            using (var engine = new TesseractEngine(@"./tessdata", "eng", EngineMode.Default)) {
                 foreach (int angle in angles) {
-                    rotatedImage = RotateImage(image, angle);
-                    string text = ocrApi.GetTextFromImage(rotatedImage);
+                    Bitmap rotatedImage = RotateImage(image, angle);
 
-                    if (text.Length > longestText.Length) {
-                        longestText = text;
+                    using (var pix = PixConverter.ToPix(rotatedImage)) {
+                        using (var page = engine.Process(pix)) {
+                            string text = page.GetText();
+
+                            if (text.Length > longestText.Length) {
+                                longestText = text;
+                            }
+                        }
                     }
                 }
 
-                // Filtriraj najduži string
-                string filteredText = Regex.Replace(longestText, @"[^a-zA-Z0-9]", string.Empty);
+                string filteredText = System.Text.RegularExpressions.Regex.Replace(longestText, @"[^a-zA-Z0-9]", string.Empty);
                 LicenceTextBox.Text = filteredText;
             }
         }
 
-        private Bitmap RotateImage(Bitmap bmp, float rotationAngle) {
-            Bitmap rotatedImage = new Bitmap(bmp.Width, bmp.Height);
-            rotatedImage.SetResolution(bmp.HorizontalResolution, bmp.VerticalResolution);
-
-            using (Graphics g = Graphics.FromImage(rotatedImage)) {
-                g.TranslateTransform(bmp.Width / 2, bmp.Height / 2);
-                g.RotateTransform(rotationAngle);
-                g.TranslateTransform(-bmp.Width / 2, -bmp.Height / 2);
-                g.DrawImage(bmp, new Point(0, 0));
+        private Bitmap RotateImage(Bitmap image, float angle) {
+            Bitmap rotatedBmp = new Bitmap(image.Width, image.Height);
+            rotatedBmp.SetResolution(image.HorizontalResolution, image.VerticalResolution);
+            using (Graphics g = Graphics.FromImage(rotatedBmp)) {
+                g.TranslateTransform((float)image.Width / 2, (float)image.Height / 2);
+                g.RotateTransform(angle);
+                g.TranslateTransform(-(float)image.Width / 2, -(float)image.Height / 2);
+                g.DrawImage(image, new Point(0, 0));
             }
 
-            return rotatedImage;
+            return rotatedBmp;
         }
-
 
 
 

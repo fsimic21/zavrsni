@@ -9,7 +9,6 @@ using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
 using System;
 using System.Drawing;
-using Patagames.Ocr;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using Color = System.Drawing.Color;
@@ -19,6 +18,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using ServiceLayer;
 using EntitiesLayer;
+using Tesseract;
 
 namespace PresentationLayer {
     public partial class AddCar : UserControl {
@@ -59,14 +59,40 @@ namespace PresentationLayer {
         }
 
         private void GetLicensePlate(Bitmap image) {
-            using (var obj = OcrApi.Create()) {
-                obj.Init(Patagames.Ocr.Enums.Languages.English);
-                string text = obj.GetTextFromImage(image);
+            int[] angles = { 0, 45, -45 };
+            string longestText = string.Empty;
 
-                string filteredText = Regex.Replace(text, @"[^a-zA-Z0-9]", string.Empty);
+            using (var engine = new TesseractEngine(@"./tessdata", "eng", EngineMode.Default)) {
+                foreach (int angle in angles) {
+                    Bitmap rotatedImage = RotateImage(image, angle);
 
+                    using (var pix = PixConverter.ToPix(rotatedImage)) {
+                        using (var page = engine.Process(pix)) {
+                            string text = page.GetText();
+
+                            if (text.Length > longestText.Length) {
+                                longestText = text;
+                            }
+                        }
+                    }
+                }
+
+                string filteredText = System.Text.RegularExpressions.Regex.Replace(longestText, @"[^a-zA-Z0-9]", string.Empty);
                 LicenceTextBox.Text = filteredText;
             }
+        }
+
+        private Bitmap RotateImage(Bitmap image, float angle) {
+            Bitmap rotatedBmp = new Bitmap(image.Width, image.Height);
+            rotatedBmp.SetResolution(image.HorizontalResolution, image.VerticalResolution);
+            using (Graphics g = Graphics.FromImage(rotatedBmp)) {
+                g.TranslateTransform((float)image.Width / 2, (float)image.Height / 2);
+                g.RotateTransform(angle);
+                g.TranslateTransform(-(float)image.Width / 2, -(float)image.Height / 2);
+                g.DrawImage(image, new Point(0, 0));
+            }
+
+            return rotatedBmp;
         }
 
 
