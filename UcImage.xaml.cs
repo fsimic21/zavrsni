@@ -20,6 +20,7 @@ using System.Text.RegularExpressions;
 using ServiceLayer;
 using EntitiesLayer;
 using System.Windows.Media;
+using System.Reflection.Metadata;
 
 namespace PresentationLayer {
     public partial class UcImage : UserControl {
@@ -79,15 +80,45 @@ namespace PresentationLayer {
         }
 
         private void GetLicensePlate(Bitmap image) {
-            using (var obj = OcrApi.Create()) {
-                obj.Init(Patagames.Ocr.Enums.Languages.English);
-                string text = obj.GetTextFromImage(image);
+            int[] angles = { 0, 45, -45 };
 
-                string filteredText = Regex.Replace(text, @"[^a-zA-Z0-9]", string.Empty);
+            using (var ocrApi = OcrApi.Create()) {
+                ocrApi.Init(Patagames.Ocr.Enums.Languages.English);
+                Bitmap rotatedImage = image;
+                string longestText = string.Empty;
 
+                foreach (int angle in angles) {
+                    rotatedImage = RotateImage(image, angle);
+                    string text = ocrApi.GetTextFromImage(rotatedImage);
+
+                    if (text.Length > longestText.Length) {
+                        longestText = text;
+                    }
+                }
+
+                // Filtriraj najduži string
+                string filteredText = Regex.Replace(longestText, @"[^a-zA-Z0-9]", string.Empty);
                 LicenceTextBox.Text = filteredText;
             }
         }
+
+        private Bitmap RotateImage(Bitmap bmp, float rotationAngle) {
+            Bitmap rotatedImage = new Bitmap(bmp.Width, bmp.Height);
+            rotatedImage.SetResolution(bmp.HorizontalResolution, bmp.VerticalResolution);
+
+            using (Graphics g = Graphics.FromImage(rotatedImage)) {
+                g.TranslateTransform(bmp.Width / 2, bmp.Height / 2);
+                g.RotateTransform(rotationAngle);
+                g.TranslateTransform(-bmp.Width / 2, -bmp.Height / 2);
+                g.DrawImage(bmp, new Point(0, 0));
+            }
+
+            return rotatedImage;
+        }
+
+
+
+
 
 
 
@@ -203,6 +234,5 @@ namespace PresentationLayer {
                 return result;
             }
         }
-
     }
 }
