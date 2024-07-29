@@ -8,29 +8,29 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
+using System.Linq;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using Color = System.Drawing.Color;
 using Point = System.Drawing.Point;
 using Size = System.Drawing.Size;
-using System.IO;
-using System.Text.RegularExpressions;
-using ServiceLayer;
-using EntitiesLayer;
-using System.Windows.Media;
-using System.Reflection.Metadata;
 using Tesseract;
+using EntitiesLayer;
+using ServiceLayer;
+using System.Windows.Media;
+using System.Text.RegularExpressions;
 
 namespace PresentationLayer {
     public partial class UcImage : UserControl {
 
-        CarService service;
+        private readonly CarService _service;
 
         public UcImage(CarService service) {
-            this.service = service;
+            _service = service;
             InitializeComponent();
-            
         }
 
         private void LoadImageButton_Click(object sender, System.Windows.RoutedEventArgs e) {
@@ -38,29 +38,22 @@ namespace PresentationLayer {
             if (openFileDialog.ShowDialog() == true) {
                 string filePath = openFileDialog.FileName;
                 DisplayImage(filePath);
-                GrayImageDisplay(filePath);
-                DetectCarColour(filePath);
+                ProcessAndDisplayGrayImage(filePath);
+                DetectCarColor(filePath);
                 CheckCar();
             }
         }
 
         private void CheckCar() {
-            List<Car> list = service.GetAllCars();
-            Car car = new Car() {
+            var car = new Car {
                 Id = 0,
                 Color = ColorTextBox.Text,
                 LicencePlate = LicenceTextBox.Text
             };
-            foreach (var c in list)
-            {
-                if(car.LicencePlate == c.LicencePlate && car.Color == c.Color) {
-                    DetectionButton.Background = new SolidColorBrush(Colors.Green);
-                    DetectionButton.Content = "Passed";
-                    break;
-                }
-                DetectionButton.Background = new SolidColorBrush(Colors.Red);
-                DetectionButton.Content = "Reject";
-            }
+            var carList = _service.GetAllCars();
+            bool carExists = carList.Any(c => c.LicencePlate == car.LicencePlate && c.Color == car.Color);
+            LicenceDetectionResult.Background = carExists ? new SolidColorBrush(Colors.Green) : new SolidColorBrush(Colors.Red);
+            LicenceDetectionResult.Text = carExists ? "Passed" : "Reject";
         }
 
         private void DisplayImage(string filePath) {
@@ -71,76 +64,62 @@ namespace PresentationLayer {
             LoadedImage.Source = bitmap;
         }
 
-        private void GrayImageDisplay(string filePath) {
+        private void ProcessAndDisplayGrayImage(string filePath) {
             Mat img = CvInvoke.Imread(filePath, ImreadModes.Color);
             Mat gray = ProcessImage(img);
             BitmapImage bitmapImage = ConvertMatToBitmapImage(gray);
             GrayImage.Source = bitmapImage;
-            GetLicensePlate(BitmapImage2Bitmap(bitmapImage));
+            ExtractLicensePlateText(BitmapImageToBitmap(bitmapImage));
         }
 
-        private void GetLicensePlate(Bitmap image) {
+        private void ExtractLicensePlateText(Bitmap image) {
             int[] angles = { 0, 45, -45 };
             string longestText = string.Empty;
 
             using (var engine = new TesseractEngine(@"./tessdata", "eng", EngineMode.Default)) {
                 foreach (int angle in angles) {
-                    Bitmap rotatedImage = RotateImage(image, angle);
-
-                    using (var pix = PixConverter.ToPix(rotatedImage)) {
-                        using (var page = engine.Process(pix)) {
-                            string text = page.GetText();
-
-                            if (text.Length > longestText.Length) {
-                                longestText = text;
-                            }
+                    using (var rotatedImage = RotateImage(image, angle))
+                    using (var pix = PixConverter.ToPix(rotatedImage))
+                    using (var page = engine.Process(pix)) {
+                        string text = page.GetText();
+                        if (text.Length > longestText.Length) {
+                            longestText = text;
                         }
                     }
                 }
-
-                string filteredText = System.Text.RegularExpressions.Regex.Replace(longestText, @"[^a-zA-Z0-9]", string.Empty);
-                LicenceTextBox.Text = filteredText;
             }
+
+            string filteredText = Regex.Replace(longestText, @"[^a-zA-Z0-9]", string.Empty);
+            LicenceTextBox.Text = filteredText;
         }
 
         private Bitmap RotateImage(Bitmap image, float angle) {
-            Bitmap rotatedBmp = new Bitmap(image.Width, image.Height);
+            var rotatedBmp = new Bitmap(image.Width, image.Height);
             rotatedBmp.SetResolution(image.HorizontalResolution, image.VerticalResolution);
             using (Graphics g = Graphics.FromImage(rotatedBmp)) {
-                g.TranslateTransform((float)image.Width / 2, (float)image.Height / 2);
+                g.TranslateTransform(image.Width / 2f, image.Height / 2f);
                 g.RotateTransform(angle);
-                g.TranslateTransform(-(float)image.Width / 2, -(float)image.Height / 2);
+                g.TranslateTransform(-image.Width / 2f, -image.Height / 2f);
                 g.DrawImage(image, new Point(0, 0));
             }
 
             return rotatedBmp;
         }
 
-
-
-
-
-
-        private Bitmap BitmapImage2Bitmap(BitmapImage bitmapImage) {
-
-            using (MemoryStream outStream = new MemoryStream()) {
-                BitmapEncoder enc = new BmpBitmapEncoder();
+        private Bitmap BitmapImageToBitmap(BitmapImage bitmapImage) {
+            using (var outStream = new MemoryStream()) {
+                var enc = new BmpBitmapEncoder();
                 enc.Frames.Add(BitmapFrame.Create(bitmapImage));
                 enc.Save(outStream);
-                Bitmap bitmap = new Bitmap(outStream);
-
-                return new Bitmap(bitmap);
+                return new Bitmap(outStream);
             }
         }
 
-
-
         private BitmapImage ConvertMatToBitmapImage(Mat mat) {
-            using (System.IO.MemoryStream memoryStream = new System.IO.MemoryStream()) {
-                Bitmap bitmap = mat.ToBitmap();
-                bitmap.Save(memoryStream, System.Drawing.Imaging.ImageFormat.Bmp);
+            using (var memoryStream = new MemoryStream()) {
+                mat.ToBitmap().Save(memoryStream, System.Drawing.Imaging.ImageFormat.Bmp);
                 memoryStream.Position = 0;
-                BitmapImage bitmapImage = new BitmapImage();
+                var bitmapImage = new BitmapImage();
                 bitmapImage.BeginInit();
                 bitmapImage.StreamSource = memoryStream;
                 bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
@@ -149,89 +128,49 @@ namespace PresentationLayer {
             }
         }
 
-        private void DetectCarColour(string filePath) {
-            Rgb24 dominantColor = GetDominantColorUsingImageSharp(filePath);
-            Color color = Color.FromArgb(dominantColor.R, dominantColor.G, dominantColor.B);
+        private void DetectCarColor(string filePath) {
+            var dominantColor = GetDominantColorUsingImageSharp(filePath);
+            var color = Color.FromArgb(dominantColor.R, dominantColor.G, dominantColor.B);
             ColorTextBox.Text = ColorTranslator.ToHtml(color);
-            ColorTextBox.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(dominantColor.R, dominantColor.G, dominantColor.B));
+            ColorTextBox.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(dominantColor.R, dominantColor.G, dominantColor.B));
         }
 
         private Rgb24 GetDominantColorUsingImageSharp(string filePath) {
             using (var image = SixLabors.ImageSharp.Image.Load<Rgb24>(filePath)) {
                 image.Mutate(x => x
-                    .Resize(new ResizeOptions() { Sampler = KnownResamplers.NearestNeighbor, Size = new SixLabors.ImageSharp.Size(100, 0) })
+                    .Resize(new ResizeOptions { Sampler = KnownResamplers.NearestNeighbor, Size = new SixLabors.ImageSharp.Size(100, 0) })
                     .Quantize(new OctreeQuantizer(new QuantizerOptions { Dither = null })));
 
                 return image[0, 0];
             }
         }
 
+        private Mat ProcessImage(Mat img) {
+            var gray = new UMat();
+            CvInvoke.CvtColor(img, gray, ColorConversion.Bgr2Gray);
+            CvInvoke.GaussianBlur(gray, gray, new Size(3, 3), 1);
+            var cannyEdges = new UMat();
+            CvInvoke.Canny(gray, cannyEdges, 180.0, 120.0);
 
-
-        public Mat ProcessImage(Mat img) {
-            using (UMat gray = new UMat())
-            using (UMat cannyEdges = new UMat()) {
-                CvInvoke.CvtColor(img, gray, ColorConversion.Bgr2Gray);
-                CvInvoke.GaussianBlur(gray, gray, new Size(3, 3), 1);
-
-                double cannyThreshold = 180.0;
-                double cannyThresholdLinking = 120.0;
-                CvInvoke.Canny(gray, cannyEdges, cannyThreshold, cannyThresholdLinking);
-
-                List<RotatedRect> boxList = new List<RotatedRect>(); 
-                using (VectorOfVectorOfPoint contours = new VectorOfVectorOfPoint()) {
-                    CvInvoke.FindContours(cannyEdges, contours, null, RetrType.List, ChainApproxMethod.ChainApproxSimple);
-                    int count = contours.Size;
-                    for (int i = 0; i < count; i++) {
-                        using (VectorOfPoint contour = contours[i])
-                        using (VectorOfPoint approxContour = new VectorOfPoint()) {
-                            CvInvoke.ApproxPolyDP(contour, approxContour, CvInvoke.ArcLength(contour, true) * 0.05, true);
-                            if (CvInvoke.ContourArea(approxContour, false) > 250) {
-                                if (approxContour.Size == 4) {
-                                    bool isRectangle = true;
-                                    Point[] pts = approxContour.ToArray();
-                                    LineSegment2D[] edges = Emgu.CV.PointCollection.PolyLine(pts, true);
-                                    for (int j = 0; j < edges.Length; j++) {
-                                        double angle = Math.Abs(edges[(j + 1) % edges.Length].GetExteriorAngleDegree(edges[j]));
-                                        if (angle < 80 || angle > 100) {
-                                            isRectangle = false;
-                                            break;
-                                        }
-                                    }
-
-                                    if (isRectangle) boxList.Add(CvInvoke.MinAreaRect(approxContour));
-                                }
-                            }
+            var boxList = new List<RotatedRect>();
+            using (var contours = new VectorOfVectorOfPoint()) {
+                CvInvoke.FindContours(cannyEdges, contours, null, RetrType.List, ChainApproxMethod.ChainApproxSimple);
+                for (int i = 0; i < contours.Size; i++) {
+                    using (var contour = contours[i])
+                    using (var approxContour = new VectorOfPoint()) {
+                        CvInvoke.ApproxPolyDP(contour, approxContour, CvInvoke.ArcLength(contour, true) * 0.05, true);
+                        if (CvInvoke.ContourArea(approxContour, false) > 250 && approxContour.Size == 4) {
+                            bool isRectangle = approxContour.ToArray().Select((p, j) => Math.Abs(
+                                Emgu.CV.PointCollection.PolyLine(approxContour.ToArray(), true)[(j + 1) % 4].GetExteriorAngleDegree(
+                                    Emgu.CV.PointCollection.PolyLine(approxContour.ToArray(), true)[j]))).All(angle => angle >= 80 && angle <= 100);
+                            if (isRectangle) boxList.Add(CvInvoke.MinAreaRect(approxContour));
                         }
                     }
                 }
-
-                RotatedRect largestBox = new RotatedRect();
-                double largestArea = 0;
-                foreach (RotatedRect box in boxList) {
-                    double area = box.Size.Width * box.Size.Height;
-                    if (area > largestArea) {
-                        largestArea = area;
-                        largestBox = box;
-                    }
-                }
-                Mat result = img;
-                if (largestArea > 0) {
-                    PointF[] vertices = largestBox.GetVertices();
-                    Point[] points = Array.ConvertAll(vertices, Point.Round);
-                    Rectangle boundingRect = CvInvoke.BoundingRectangle(points);
-
-                    result = new Mat(img, boundingRect);
-                }
-
-                if (result.Width > 499) {
-                    double scaleFactor = 499.0 / result.Width;
-                    Size newSize = new Size(499, (int)(result.Height * scaleFactor));
-                    CvInvoke.Resize(result, result, newSize);
-                }
-
-                return result;
             }
+
+            var largestBox = boxList.OrderByDescending(box => box.Size.Width * box.Size.Height).FirstOrDefault();
+            return largestBox.Equals(default(RotatedRect)) ? img : new Mat(img, CvInvoke.BoundingRectangle(largestBox.GetVertices().Select(Point.Round).ToArray()));
         }
     }
 }

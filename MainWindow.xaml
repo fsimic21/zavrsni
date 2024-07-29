@@ -9,7 +9,6 @@
     <Grid>
         <Menu VerticalAlignment="Top">
             <MenuItem Header="Home Screen" Click="HomeScreen_Click"/>
-            <MenuItem Header="Camera" Click="Camera_Click"/>
             <MenuItem Header="Image" Click="Image_Click"/>
             <MenuItem Header="Manage cars" Click="Manage_Click"/>
         </Menu>

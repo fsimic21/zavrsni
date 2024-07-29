@@ -14,17 +14,14 @@ namespace PresentationLayer
             InitializeComponent();
             repository = new CarRepository();
             service = new CarService(repository);
+            UcHomeScreen screen = new UcHomeScreen();
+            MainContent.Content = screen;
         }
 
         private void HomeScreen_Click(object sender, RoutedEventArgs e)
         {
             UcHomeScreen screen = new UcHomeScreen();
             MainContent.Content = screen;
-        }
-
-        private void Camera_Click(object sender, RoutedEventArgs e)
-        {
-           
         }
 
         private void Image_Click(object sender, RoutedEventArgs e) {
