@@ -20,8 +20,8 @@
         <Button x:Name="LoadImageButton" Content="Load Image" HorizontalAlignment="Left" VerticalAlignment="Top" Width="200" Height="30" Margin="10" Click="LoadImageButton_Click" Grid.Row="0" Grid.ColumnSpan="2"/>
         <Button x:Name="AddCarButton" Content="Add car" HorizontalAlignment="Left" VerticalAlignment="Top" Width="200" Height="30" Margin="10" Click="AddCarButton_Click"  Grid.Row="0" Grid.Column="1"/>
 
-        <Image x:Name="LoadedImage" HorizontalAlignment="Center" VerticalAlignment="Top" Width="400" Height="250" Margin="10" Grid.Row="1" Grid.Column="0"/>
-        <Image x:Name="GrayImage" HorizontalAlignment="Center" VerticalAlignment="Top" Width="400" Height="250" Margin="10" Grid.Row="1" Grid.Column="1"/>
+        <Image x:Name="LoadedImage" HorizontalAlignment="Center" VerticalAlignment="Center"  Margin="10" Grid.Row="1" Grid.Column="0"/>
+        <Image x:Name="GrayImage" HorizontalAlignment="Center" VerticalAlignment="Center"  Margin="10" Grid.Row="1" Grid.Column="1"/>
 
         <StackPanel Margin="10" Grid.Row="2" Grid.Column="0" HorizontalAlignment="Center">
             <TextBlock Text="License Plate:" Margin="0,0,0,5"/>
