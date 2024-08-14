@@ -38,7 +38,7 @@ namespace PresentationLayer {
             if (openFileDialog.ShowDialog() == true) {
                 string filePath = openFileDialog.FileName;
                 DisplayImage(filePath);
-                ProcessAndDisplayGrayImage(filePath);
+                ProcessImage(filePath);
                 DetectCarColor(filePath);
                 CheckCar();
             }
@@ -64,12 +64,58 @@ namespace PresentationLayer {
             LoadedImage.Source = bitmap;
         }
 
-        private void ProcessAndDisplayGrayImage(string filePath) {
+        private void ProcessImage(string filePath) {
             Mat img = CvInvoke.Imread(filePath, ImreadModes.Color);
-            Mat gray = ProcessImage(img);
-            BitmapImage bitmapImage = ConvertMatToBitmapImage(gray);
-            GrayImage.Source = bitmapImage;
-            ExtractLicensePlateText(BitmapImageToBitmap(bitmapImage));
+            UMat gray = ConvertToGrayScale(img);
+            UMat blurred = ApplyGaussianBlur(gray);
+            UMat edges = DetectEdges(blurred);
+            Mat licensePlateRegion = FindLicensePlate(edges.GetMat(AccessType.Read), img);
+
+            if (licensePlateRegion != null) {
+                BitmapImage licensePlateImage = ConvertMatToBitmapImage(licensePlateRegion);
+                GrayImage.Source = licensePlateImage;
+                ExtractLicensePlateText(BitmapImageToBitmap(licensePlateImage));
+            }
+        }
+
+        private UMat ConvertToGrayScale(Mat img) {
+            var gray = new UMat();
+            CvInvoke.CvtColor(img, gray, ColorConversion.Bgr2Gray);
+            return gray;
+        }
+
+        private UMat ApplyGaussianBlur(UMat gray) {
+            var blurred = new UMat();
+            CvInvoke.GaussianBlur(gray, blurred, new Size(3, 3), 1);
+            return blurred;
+        }
+
+        private UMat DetectEdges(UMat blurred) {
+            var edges = new UMat();
+            CvInvoke.Canny(blurred, edges, 180.0, 120.0);
+            return edges;
+        }
+
+        private Mat FindLicensePlate(Mat edges, Mat originalImage) {
+            var boxList = new List<RotatedRect>();
+            using (var contours = new VectorOfVectorOfPoint()) {
+                CvInvoke.FindContours(edges, contours, null, RetrType.List, ChainApproxMethod.ChainApproxSimple);
+                for (int i = 0; i < contours.Size; i++) {
+                    using (var contour = contours[i])
+                    using (var approxContour = new VectorOfPoint()) {
+                        CvInvoke.ApproxPolyDP(contour, approxContour, CvInvoke.ArcLength(contour, true) * 0.05, true);
+                        if (CvInvoke.ContourArea(approxContour, false) > 250 && approxContour.Size == 4) {
+                            bool isRectangle = approxContour.ToArray().Select((p, j) => Math.Abs(
+                                Emgu.CV.PointCollection.PolyLine(approxContour.ToArray(), true)[(j + 1) % 4].GetExteriorAngleDegree(
+                                    Emgu.CV.PointCollection.PolyLine(approxContour.ToArray(), true)[j]))).All(angle => angle >= 80 && angle <= 100);
+                            if (isRectangle) boxList.Add(CvInvoke.MinAreaRect(approxContour));
+                        }
+                    }
+                }
+            }
+
+            var largestBox = boxList.OrderByDescending(box => box.Size.Width * box.Size.Height).FirstOrDefault();
+            return largestBox.Equals(default(RotatedRect)) ? null : new Mat(originalImage, CvInvoke.BoundingRectangle(largestBox.GetVertices().Select(Point.Round).ToArray()));
         }
 
         private void ExtractLicensePlateText(Bitmap image) {
@@ -143,34 +189,6 @@ namespace PresentationLayer {
 
                 return image[0, 0];
             }
-        }
-
-        private Mat ProcessImage(Mat img) {
-            var gray = new UMat();
-            CvInvoke.CvtColor(img, gray, ColorConversion.Bgr2Gray);
-            CvInvoke.GaussianBlur(gray, gray, new Size(3, 3), 1);
-            var cannyEdges = new UMat();
-            CvInvoke.Canny(gray, cannyEdges, 180.0, 120.0);
-
-            var boxList = new List<RotatedRect>();
-            using (var contours = new VectorOfVectorOfPoint()) {
-                CvInvoke.FindContours(cannyEdges, contours, null, RetrType.List, ChainApproxMethod.ChainApproxSimple);
-                for (int i = 0; i < contours.Size; i++) {
-                    using (var contour = contours[i])
-                    using (var approxContour = new VectorOfPoint()) {
-                        CvInvoke.ApproxPolyDP(contour, approxContour, CvInvoke.ArcLength(contour, true) * 0.05, true);
-                        if (CvInvoke.ContourArea(approxContour, false) > 250 && approxContour.Size == 4) {
-                            bool isRectangle = approxContour.ToArray().Select((p, j) => Math.Abs(
-                                Emgu.CV.PointCollection.PolyLine(approxContour.ToArray(), true)[(j + 1) % 4].GetExteriorAngleDegree(
-                                    Emgu.CV.PointCollection.PolyLine(approxContour.ToArray(), true)[j]))).All(angle => angle >= 80 && angle <= 100);
-                            if (isRectangle) boxList.Add(CvInvoke.MinAreaRect(approxContour));
-                        }
-                    }
-                }
-            }
-
-            var largestBox = boxList.OrderByDescending(box => box.Size.Width * box.Size.Height).FirstOrDefault();
-            return largestBox.Equals(default(RotatedRect)) ? img : new Mat(img, CvInvoke.BoundingRectangle(largestBox.GetVertices().Select(Point.Round).ToArray()));
         }
     }
 }
